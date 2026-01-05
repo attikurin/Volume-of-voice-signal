@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>声の大きさ信号機</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap');
+
+        body {
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            background-color: #f0f9ff;
+            user-select: none;
+        }
+
+        /* 信号機の本体 */
+        .traffic-light-body {
+            background: #2d3748;
+            border-radius: 40px;
+            padding: 20px;
+            box-shadow: 10px 10px 20px rgba(0,0,0,0.2), inset 5px 5px 15px rgba(255,255,255,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            width: 140px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        /* 信号機のライト共通 */
+        .light {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background-color: #4a5568; /* 消灯時 */
+            box-shadow: inset 0 5px 10px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 光沢エフェクト */
+        .light::after {
+            content: '';
+            position: absolute;
+            top: 10%;
+            left: 20%;
+            width: 30%;
+            height: 20%;
+            border-radius: 50%;
+            background: linear-gradient(180deg, rgba(255,255,255,0.8), rgba(255,255,255,0.1));
+            filter: blur(1px);
+        }
+
+        /* 点灯状態 */
+        .light.blue.active {
+            background-color: #3b82f6;
+            box-shadow: 0 0 40px #3b82f6, inset 0 0 20px #93c5fd;
+        }
+        .light.yellow.active {
+            background-color: #eab308;
+            box-shadow: 0 0 40px #eab308, inset 0 0 20px #fde047;
+        }
+        .light.red.active {
+            background-color: #ef4444;
+            box-shadow: 0 0 50px #ef4444, inset 0 0 20px #fca5a5;
+            animation: pulseRed 0.8s infinite alternate;
+        }
+
+        @keyframes pulseRed {
+            from { transform: scale(1); box-shadow: 0 0 30px #ef4444; }
+            to { transform: scale(1.05); box-shadow: 0 0 60px #ef4444; }
+        }
+
+        /* メーター */
+        .meter-container {
+            width: 100%;
+            height: 30px;
+            background: #e2e8f0;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        
+        .meter-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #3b82f6, #eab308, #ef4444);
+            transition: width 0.1s linear;
+        }
+
+        /* インジケーターのアイコン */
+        .status-icon {
+            font-size: 3rem;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .bounce {
+            animation: bounce 0.5s infinite alternate;
+        }
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-10px); }
+        }
+
+        /* カードのスタイル */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 10px 25px rgba(148, 163, 184, 0.2);
+        }
+
+        /* モード選択ボタン */
+        .mode-btn {
+            transition: all 0.2s;
+        }
+        .mode-btn.active {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.5);
+        }
+
+        /* シェイクアニメーション（警告時） */
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        /* モーダル表示のアニメーション */
+        #settingsModal.hidden {
+            display: none;
+        }
+        #settingsModal:not(.hidden) {
+            animation: fadeIn 0.3s forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4 relative">
+
+    <!-- 設定メニューボタン (右上) -->
+    <button id="menuBtn" class="fixed top-4 right-4 z-40 bg-white/80 p-3 rounded-full shadow-md text-slate-500 hover:text-blue-600 hover:bg-white transition" title="詳細設定">
+        <i class="fa-solid fa-bars text-2xl"></i>
+    </button>
+
+    <!-- メインコンテンツ -->
+    <div class="glass-panel w-full max-w-4xl p-6 md:p-8 flex flex-col md:flex-row gap-8 items-center justify-center relative z-10">
+        
+        <!-- 左側：信号機とキャラクター -->
+        <div class="flex flex-col items-center gap-6 flex-1">
+            <h1 class="text-2xl md:text-3xl font-black text-slate-700 tracking-wider text-center">
+                <i class="fa-solid fa-microphone-lines mr-2 text-blue-500"></i>声の大きさ信号機
+            </h1>
+
+            <div class="flex items-end justify-center gap-8">
+                <!-- 信号機 -->
+                <div class="traffic-light-body" id="trafficLight">
+                    <div class="light red" id="lightRed">
+                        <i class="fa-solid fa-exclamation text-3xl text-white opacity-50"></i>
+                    </div>
+                    <div class="light yellow" id="lightYellow">
+                        <i class="fa-solid fa-bell text-3xl text-white opacity-50"></i>
+                    </div>
+                    <div class="light blue active" id="lightBlue">
+                        <i class="fa-solid fa-music text-3xl text-white opacity-50"></i>
+                    </div>
+                </div>
+
+                <!-- キャラクター表示エリア -->
+                <div class="flex flex-col items-center justify-end h-full pb-4 w-32">
+                    <div id="statusIcon" class="status-icon text-6xl mb-2">🦉</div>
+                    <div id="statusText" class="text-xl font-bold text-slate-600 bg-white px-3 py-1 rounded-full shadow-sm">静かです</div>
+                </div>
+            </div>
+
+            <!-- メーター -->
+            <div class="w-full max-w-sm">
+                <div class="flex justify-between text-xs font-bold text-slate-400 mb-1 px-1">
+                    <span>静か</span>
+                    <span>注意</span>
+                    <span>うるさい</span>
+                </div>
+                <div class="meter-container">
+                    <div id="audioLevelBar" class="meter-bar"></div>
+                    <!-- しきい値マーカー -->
+                    <div id="markerYellow" class="absolute top-0 bottom-0 w-1 bg-white/50 border-l border-slate-400 border-dashed transition-all duration-300" style="left: 50%"></div>
+                    <div id="markerRed" class="absolute top-0 bottom-0 w-1 bg-white/50 border-l border-red-500 border-dashed transition-all duration-300" style="left: 80%"></div>
+                </div>
+                <div class="text-right text-xs text-slate-400 mt-1">現在の音量レベル: <span id="volValue">0</span>%</div>
+            </div>
+        </div>
+
+        <!-- 右側：コントロールパネル -->
+        <div class="flex flex-col gap-6 w-full md:w-80 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+            
+            <!-- スタートボタンエリア -->
+            <div class="text-center">
+                <button id="startBtn" class="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg transform transition active:scale-95 text-xl flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-power-off"></i> 測定スタート
+                </button>
+                <p class="text-xs text-slate-500 mt-2">※マイクの使用を許可してください</p>
+            </div>
+
+            <hr class="border-slate-200">
+
+            <!-- モード選択 -->
+            <div>
+                <label class="block text-sm font-bold text-slate-600 mb-3"><i class="fa-solid fa-sliders mr-1"></i> 感度モード設定</label>
+                <div class="grid grid-cols-1 gap-2">
+                    <!-- data-mode属性を追加しました -->
+                    <button class="mode-btn active px-4 py-3 rounded-lg border border-slate-300 bg-white text-slate-600 font-bold flex items-center justify-between" data-mode="study" onclick="setMode('study')">
+                        <span><i class="fa-solid fa-book-open mr-2"></i>自習モード</span>
+                        <span class="text-xs font-normal bg-slate-100 px-2 py-1 rounded">厳しい</span>
+                    </button>
+                    <button class="mode-btn px-4 py-3 rounded-lg border border-slate-300 bg-white text-slate-600 font-bold flex items-center justify-between" data-mode="class" onclick="setMode('class')">
+                        <span><i class="fa-solid fa-chalkboard-user mr-2"></i>授業モード</span>
+                        <span class="text-xs font-normal bg-slate-100 px-2 py-1 rounded">標準</span>
+                    </button>
+                    <button class="mode-btn px-4 py-3 rounded-lg border border-slate-300 bg-white text-slate-600 font-bold flex items-center justify-between" data-mode="group" onclick="setMode('group')">
+                        <span><i class="fa-solid fa-users mr-2"></i>グループ活動</span>
+                        <span class="text-xs font-normal bg-slate-100 px-2 py-1 rounded">寛容</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- カウンター -->
+            <div class="bg-red-50 border border-red-100 rounded-xl p-4 flex justify-between items-center">
+                <div>
+                    <div class="text-xs font-bold text-red-400">注意回数</div>
+                    <div class="text-3xl font-black text-red-500" id="alertCount">0</div>
+                </div>
+                <button onclick="resetCount()" class="text-sm bg-white text-red-400 hover:text-red-600 border border-red-200 px-3 py-1 rounded-lg shadow-sm">
+                    <i class="fa-solid fa-rotate-right"></i> リセット
+                </button>
+            </div>
+
+            <!-- 設定オプション -->
+            <div class="flex items-center gap-2 mt-2">
+                <input type="checkbox" id="soundToggle" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked>
+                <label for="soundToggle" class="text-sm font-bold text-slate-600 cursor-pointer select-none">警告音を鳴らす（優しい音）</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- 設定モーダル -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 transform transition-all scale-100">
+            <div class="flex justify-between items-center mb-6 border-b pb-4 border-slate-100">
+                <h2 class="text-xl font-bold text-slate-700"><i class="fa-solid fa-sliders mr-2 text-blue-500"></i>感度・しきい値調整</h2>
+                <button id="closeMenuBtn" class="text-slate-400 hover:text-slate-600 text-2xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-8">
+                <!-- Sensitivity -->
+                <div>
+                    <div class="flex justify-between mb-2 items-end">
+                        <label class="font-bold text-slate-600 text-sm">
+                            マイク感度
+                            <span class="text-xs font-normal text-slate-400 block">マイクの拾いやすさ</span>
+                        </label>
+                        <span id="valSensitivity" class="text-blue-600 font-bold text-lg">1.5</span>
+                    </div>
+                    <input type="range" id="rangeSensitivity" min="0.1" max="5.0" step="0.1" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                    <div class="flex justify-between text-xs text-slate-400 mt-1">
+                        <span>鈍感</span>
+                        <span>敏感</span>
+                    </div>
+                </div>
+
+                <!-- Yellow Threshold -->
+                <div>
+                    <div class="flex justify-between mb-2 items-end">
+                        <label class="font-bold text-slate-600 text-sm">
+                            <i class="fa-solid fa-circle text-yellow-400 mr-1"></i>黄色になるレベル
+                        </label>
+                        <span id="valYellow" class="text-yellow-600 font-bold text-lg">40%</span>
+                    </div>
+                    <input type="range" id="rangeYellow" min="10" max="90" step="1" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-yellow-400">
+                </div>
+
+                <!-- Red Threshold -->
+                <div>
+                    <div class="flex justify-between mb-2 items-end">
+                        <label class="font-bold text-slate-600 text-sm">
+                            <i class="fa-solid fa-circle text-red-500 mr-1"></i>赤色になるレベル
+                        </label>
+                        <span id="valRed" class="text-red-600 font-bold text-lg">70%</span>
+                    </div>
+                    <input type="range" id="rangeRed" min="20" max="100" step="1" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-500">
+                </div>
+            </div>
+
+            <div class="mt-8 pt-4 border-t border-slate-100 flex justify-end">
+                 <button id="closeMenuBtn2" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-xl shadow-md transition">
+                    完了
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- フッター -->
+    <div class="mt-8 text-center text-slate-400 text-sm relative z-10">
+        <p>音声データはサーバーに送信されず、お使いの端末内でのみ処理されます。</p>
+    </div>
+
+    <script>
+        // 設定値（デフォルトは授業モード）
+        let CONFIG = {
+            thresholdYellow: 40,
+            thresholdRed: 70,
+            sensitivity: 1.5, // マイク入力の増幅率
+            samplingInterval: 50 // ms
+        };
+
+        // モード定義
+        const MODES = {
+            study: { yellow: 20, red: 45, sensitivity: 2.0, name: "自習モード" },
+            class: { yellow: 40, red: 70, sensitivity: 1.5, name: "授業モード" },
+            group: { yellow: 70, red: 90, sensitivity: 0.8, name: "グループ活動" }
+        };
+
+        // DOM要素
+        const lights = {
+            red: document.getElementById('lightRed'),
+            yellow: document.getElementById('lightYellow'),
+            blue: document.getElementById('lightBlue')
+        };
+        const statusIcon = document.getElementById('statusIcon');
+        const statusText = document.getElementById('statusText');
+        const levelBar = document.getElementById('audioLevelBar');
+        const volValue = document.getElementById('volValue');
+        const startBtn = document.getElementById('startBtn');
+        const alertCountDisplay = document.getElementById('alertCount');
+        const markerYellow = document.getElementById('markerYellow');
+        const markerRed = document.getElementById('markerRed');
+        const trafficLightBody = document.getElementById('trafficLight');
+
+        // 設定モーダル用DOM
+        const menuBtn = document.getElementById('menuBtn');
+        const settingsModal = document.getElementById('settingsModal');
+        const closeMenuBtn = document.getElementById('closeMenuBtn');
+        const closeMenuBtn2 = document.getElementById('closeMenuBtn2');
+        const rangeSensitivity = document.getElementById('rangeSensitivity');
+        const rangeYellow = document.getElementById('rangeYellow');
+        const rangeRed = document.getElementById('rangeRed');
+        const valSensitivity = document.getElementById('valSensitivity');
+        const valYellow = document.getElementById('valYellow');
+        const valRed = document.getElementById('valRed');
+
+
+        // 変数
+        let audioContext;
+        let analyser;
+        let microphone;
+        let isRunning = false;
+        let alertCount = 0;
+        let currentStatus = 'blue'; // blue, yellow, red
+        let redStayCounter = 0; // 赤状態の持続カウンタ（一瞬のスパイクで反応させないため）
+        let lastAlertTime = 0; // 音の連打防止
+
+        // 動物アイコン
+        const ICONS = {
+            blue: '🦉', // 静か
+            yellow: '🐤', // 少しざわついている
+            red: '🦁'   // うるさい
+        };
+        const TEXTS = {
+            blue: '静かです',
+            yellow: '少し声が大きい？',
+            red: '声をおさえて！'
+        };
+
+        // モード切替処理（修正版）
+        function setMode(modeKey) {
+            const setting = MODES[modeKey];
+            
+            // CONFIGを更新
+            CONFIG.thresholdYellow = setting.yellow;
+            CONFIG.thresholdRed = setting.red;
+            CONFIG.sensitivity = setting.sensitivity;
+
+            // スライダーの値も同期
+            updateSlidersFromConfig();
+
+            // UI更新（ボタンのアクティブ状態）
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            
+            const activeBtn = document.querySelector(`.mode-btn[data-mode="${modeKey}"]`);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
+
+            updateMarkerPositions();
+            console.log(`Mode switched to: ${setting.name}`);
+        }
+
+        // マーカー位置の更新
+        function updateMarkerPositions() {
+            markerYellow.style.left = `${CONFIG.thresholdYellow}%`;
+            markerRed.style.left = `${CONFIG.thresholdRed}%`;
+        }
+
+        // スライダー操作時の処理
+        function setupSliders() {
+            // Sensitivity
+            rangeSensitivity.addEventListener('input', (e) => {
+                CONFIG.sensitivity = parseFloat(e.target.value);
+                valSensitivity.innerText = CONFIG.sensitivity.toFixed(1);
+                clearModeActiveState(); // 手動操作したのでモード選択を外す（見た目上）
+            });
+
+            // Yellow Threshold
+            rangeYellow.addEventListener('input', (e) => {
+                let val = parseInt(e.target.value);
+                // 赤より大きくならないように制御（簡易版）
+                if (val >= CONFIG.thresholdRed) {
+                    val = CONFIG.thresholdRed - 1;
+                    rangeYellow.value = val;
+                }
+                CONFIG.thresholdYellow = val;
+                valYellow.innerText = val + '%';
+                updateMarkerPositions();
+                clearModeActiveState();
+            });
+
+            // Red Threshold
+            rangeRed.addEventListener('input', (e) => {
+                let val = parseInt(e.target.value);
+                // 黄色より小さくならないように制御
+                if (val <= CONFIG.thresholdYellow) {
+                    val = CONFIG.thresholdYellow + 1;
+                    rangeRed.value = val;
+                }
+                CONFIG.thresholdRed = val;
+                valRed.innerText = val + '%';
+                updateMarkerPositions();
+                clearModeActiveState();
+            });
+        }
+
+        function updateSlidersFromConfig() {
+            rangeSensitivity.value = CONFIG.sensitivity;
+            valSensitivity.innerText = CONFIG.sensitivity.toFixed(1);
+
+            rangeYellow.value = CONFIG.thresholdYellow;
+            valYellow.innerText = CONFIG.thresholdYellow + '%';
+
+            rangeRed.value = CONFIG.thresholdRed;
+            valRed.innerText = CONFIG.thresholdRed + '%';
+        }
+
+        // 手動調整時にモードボタンの選択状態を解除（オプション）
+        function clearModeActiveState() {
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+        }
+
+        // モーダル制御
+        function toggleModal(show) {
+            if (show) {
+                settingsModal.classList.remove('hidden');
+                // スライダーを今の設定値に合わせる（念のため）
+                updateSlidersFromConfig();
+            } else {
+                settingsModal.classList.add('hidden');
+            }
+        }
+
+        menuBtn.addEventListener('click', () => toggleModal(true));
+        closeMenuBtn.addEventListener('click', () => toggleModal(false));
+        closeMenuBtn2.addEventListener('click', () => toggleModal(false));
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) toggleModal(false);
+        });
+
+        // スタート/ストップ処理
+        startBtn.addEventListener('click', async () => {
+            if (isRunning) {
+                stopAudio();
+            } else {
+                await startAudio();
+            }
+        });
+
+        async function startAudio() {
+            try {
+                // AudioContextの作成（ユーザー操作必須）
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // マイク入力の取得
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                microphone = audioContext.createMediaStreamSource(stream);
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                microphone.connect(analyser);
+
+                isRunning = true;
+                startBtn.innerHTML = '<i class="fa-solid fa-stop"></i> 測定停止';
+                startBtn.classList.remove('from-blue-500', 'to-indigo-600');
+                startBtn.classList.add('from-red-500', 'to-pink-600');
+                
+                analyzeLoop();
+
+            } catch (err) {
+                console.error("マイクへのアクセスに失敗しました:", err);
+                alert("マイクへのアクセスが拒否されたか、エラーが発生しました。ブラウザの設定を確認してください。");
+            }
+        }
+
+        function stopAudio() {
+            if (microphone) microphone.disconnect();
+            if (analyser) analyser.disconnect();
+            if (audioContext) audioContext.close();
+            
+            isRunning = false;
+            startBtn.innerHTML = '<i class="fa-solid fa-power-off"></i> 測定スタート';
+            startBtn.classList.add('from-blue-500', 'to-indigo-600');
+            startBtn.classList.remove('from-red-500', 'to-pink-600');
+            
+            // UIリセット
+            updateTrafficLight('blue');
+            levelBar.style.width = '0%';
+            volValue.innerText = '0';
+        }
+
+        // 解析ループ
+        function analyzeLoop() {
+            if (!isRunning) return;
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteTimeDomainData(dataArray);
+
+            // RMS (二乗平均平方根) を計算して音量を取得
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) {
+                const x = (dataArray[i] - 128) / 128.0; // -1 to 1
+                sum += x * x;
+            }
+            let rms = Math.sqrt(sum / bufferLength);
+
+            // 音量を0-100のスケールに変換（感度調整込み）
+            // 通常rmsは0.0~0.5くらいが多いので、それを拡張する
+            let volume = Math.min(100, Math.floor(rms * 400 * CONFIG.sensitivity));
+
+            updateUI(volume);
+
+            requestAnimationFrame(analyzeLoop);
+        }
+
+        // UI更新ロジック
+        function updateUI(volume) {
+            // メーター更新
+            levelBar.style.width = `${volume}%`;
+            volValue.innerText = volume;
+
+            // 状態判定
+            let nextStatus = 'blue';
+
+            // バッファリング（一瞬のピーク対策）
+            if (volume > CONFIG.thresholdRed) {
+                redStayCounter++;
+            } else {
+                redStayCounter = Math.max(0, redStayCounter - 1);
+            }
+
+            if (redStayCounter > 5 || volume > CONFIG.thresholdRed + 10) { 
+                // 継続してうるさい、または突発的にすごくうるさい
+                nextStatus = 'red';
+            } else if (volume > CONFIG.thresholdYellow) {
+                nextStatus = 'yellow';
+            } else {
+                nextStatus = 'blue';
+            }
+
+            // 状態が変わった時のみ処理
+            if (currentStatus !== nextStatus) {
+                // 黄色→赤に変わったときのみカウントアップ
+                if (nextStatus === 'red' && currentStatus !== 'red') {
+                    incrementAlert();
+                    playSound('alert');
+                    trafficLightBody.classList.add('shake');
+                    setTimeout(() => trafficLightBody.classList.remove('shake'), 500);
+                } else if (nextStatus === 'yellow' && currentStatus === 'blue') {
+                    // 青→黄
+                    playSound('chirp');
+                }
+
+                updateTrafficLight(nextStatus);
+                currentStatus = nextStatus;
+            }
+        }
+
+        // 信号機とアイコンの見た目を更新
+        function updateTrafficLight(status) {
+            // 全消灯
+            lights.red.classList.remove('active');
+            lights.yellow.classList.remove('active');
+            lights.blue.classList.remove('active');
+
+            // 対象点灯
+            lights[status].classList.add('active');
+
+            // アイコンとテキスト更新
+            statusIcon.innerText = ICONS[status];
+            statusText.innerText = TEXTS[status];
+
+            // 色に応じたスタイル調整
+            if (status === 'red') {
+                statusText.className = "text-xl font-bold text-red-600 bg-red-50 px-3 py-1 rounded-full shadow-sm border border-red-200";
+                statusIcon.classList.add('bounce');
+            } else if (status === 'yellow') {
+                statusText.className = "text-xl font-bold text-yellow-600 bg-yellow-50 px-3 py-1 rounded-full shadow-sm border border-yellow-200";
+                statusIcon.classList.remove('bounce');
+            } else {
+                statusText.className = "text-xl font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full shadow-sm border border-blue-200";
+                statusIcon.classList.remove('bounce');
+            }
+        }
+
+        function incrementAlert() {
+            alertCount++;
+            alertCountDisplay.innerText = alertCount;
+            // アニメーション
+            alertCountDisplay.style.transform = "scale(1.5)";
+            setTimeout(() => {
+                alertCountDisplay.style.transform = "scale(1)";
+            }, 200);
+        }
+
+        function resetCount() {
+            alertCount = 0;
+            alertCountDisplay.innerText = 0;
+        }
+
+        // Web Audio APIを使った簡易サウンド生成（mp3ファイル不要）
+        function playSound(type) {
+            if (!document.getElementById('soundToggle').checked) return;
+            
+            // 短時間での連続再生防止
+            const now = Date.now();
+            if (now - lastAlertTime < 1000) return; 
+            lastAlertTime = now;
+
+            const ctx = audioContext;
+            const osc = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+
+            osc.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            if (type === 'alert') {
+                // 優しい警告音（ポンッという音）
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.3);
+                
+                gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+
+                osc.start();
+                osc.stop(ctx.currentTime + 0.3);
+
+            } else if (type === 'chirp') {
+                // 鳥のさえずり風（ピヨッ）
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.1);
+                
+                gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1);
+
+                osc.start();
+                osc.stop(ctx.currentTime + 0.1);
+            }
+        }
+
+        // 初期化
+        setupSliders();
+        setMode('class');
+    </script>
+</body>
+</html>
